@@ -4,12 +4,23 @@
   <arg name="launch_move_base" default="true" />
   <arg name="launch_sound_play" default="true" />
   <arg name="use_voice_text" default="true" />
+  <arg name="fetch_lifelog" default="true" />
   <arg name="boot_sound" default="false" />
   <arg name="map_frame" default="eng2" />
   <arg name="map_file" default="$(find jsk_maps)/raw_maps/eng2-7f-0.05.yaml"/>
   <arg name="keepout_map_file" default="$(find jsk_maps)/raw_maps/eng2-7f-0.05_keepout.yaml" />
   <arg name="use_keepout" default="true" />
   <arg name="use_build_map" default="false" />
+
+  <arg name="battery_warning" default="true" />
+  <arg name="nav_speak" default="true" />
+  <arg name="fetch_tweet" default="true" />
+  <arg name="rwt_image_view" default="true" />
+  <arg name="fetch_sensors" default="true" />
+  <arg name="use_safe_teleop" default="true" />
+  <arg name="network_detector" default="true" />
+  <arg name="network_status" default="true" />
+  <arg name="use_speech_recognition" default="true" />
 
   <param name="robot/type" value="fetch" />
   <param name="robot/name" command='bash -c "hostname | xargs echo -n"' />
@@ -18,7 +29,7 @@
 
   <!-- add jsk startups -->
   <node pkg="jsk_fetch_startup" name="battery_warning" type="battery_warning.py"
-        respawn="true" output="screen">
+        respawn="true" output="screen" if="$(arg battery_warning)">
     <rosparam>
       duration: 180
       charge_level_threshold: 40.0
@@ -26,12 +37,18 @@
     </rosparam>
   </node>
 
-  <node pkg="jsk_fetch_startup" name="nav_speak" type="nav_speak.py" respawn="true" >
+  <node pkg="jsk_fetch_startup" name="nav_speak" type="nav_speak.py" respawn="true" if="$(arg nav_speak)">
     <rosparam>
       lang: japanese
     </rosparam>
   </node>
   <node if="$(arg boot_sound)" pkg="jsk_fetch_startup" name="boot_sound" type="boot_sound.py" />
+
+  <!-- look at human for Fetch -->
+  <node name="look_at_human"
+        pkg="jsk_fetch_startup" type="fetch-look-at-human.l" output="screen">
+    <remap from="~input/people_pose_array" to="/edgetpu_human_pose_estimator/output/poses"/>
+  </node>
 
   <!-- english speach node -->
   <!-- disable sound_play in julius.launch and place it in fetch_bringup.launch -->
@@ -55,7 +72,7 @@
   </node>
 
   <!-- logging -->
-  <include file="$(find jsk_fetch_startup)/launch/fetch_lifelog.xml">
+  <include file="$(find jsk_fetch_startup)/launch/fetch_lifelog.xml" if="$(arg fetch_lifelog)">
     <arg name="map_frame" value="$(arg map_frame)" />
     <arg name="vital_check" value="false" />
   </include>
@@ -77,7 +94,7 @@
   </node>
 
   <!-- twitter -->
-  <include file="$(find jsk_fetch_startup)/launch/fetch_tweet.launch" />
+  <include file="$(find jsk_fetch_startup)/launch/fetch_tweet.launch" if="$(arg fetch_tweet)"/>
 
   <!-- app manager -->
   <include file="$(find jsk_robot_startup)/lifelog/app_manager.launch">
@@ -88,79 +105,83 @@
   </include>
 
   <!-- rwt_image_view -->
-  <include file="$(find jsk_robot_startup)/lifelog/rwt_image_view.launch">
+  <include file="$(find jsk_robot_startup)/lifelog/rwt_image_view.launch" if="$(arg rwt_image_view)">
     <arg name="launch_roswww" value="false" />
     <arg name="launch_websocket" value="false" />
   </include>
 
   <!-- downsample / throttle sensor data -->
-  <include file="$(find jsk_fetch_startup)/launch/fetch_sensors.xml" >
+  <include file="$(find jsk_fetch_startup)/launch/fetch_sensors.xml" if="$(arg fetch_sensors)">
     <arg name="launch_manager" value="false"/>
   </include>
 
   <!-- include fetch moveit -->
-  <include file="$(find fetch_moveit_config)/launch/move_group.launch"
-           if="$(arg launch_moveit)" />
-  <!-- overwrite fetch.srdf -->
-  <!-- The semantic description that corresponds to the URDF -->
-  <param name="robot_description_semantic"
-         command="rosrun xacro xacro --inorder $(find jsk_fetch_startup)/launch/moveit/fetch.srdf.xacro" />
+  <group if="$(arg launch_moveit)">
+    <include file="$(find fetch_moveit_config)/launch/move_group.launch" />
+    <!-- overwrite fetch.srdf -->
+    <!-- The semantic description that corresponds to the URDF -->
+    <param name="robot_description_semantic"
+           command="rosrun xacro xacro --inorder $(find jsk_fetch_startup)/launch/moveit/fetch.srdf.xacro" />
+  </group>
 
   <!-- teleop -->
   <include file="$(find jsk_fetch_startup)/launch/fetch_teleop.xml"
            if="$(arg launch_teleop)" >
-      <arg name="odom_topic" value="/odom_combined" />
+    <arg name="use_safe_teleop" value="$(arg use_safe_teleop)" />
+    <arg name="odom_topic" value="/odom_combined" />
   </include>
 
   <!-- network detector -->
-  <node pkg="pr2_computer_monitor" type="network_detector" name="network_detector">
+  <node pkg="pr2_computer_monitor" type="network_detector" name="network_detector" if="$(arg network_detector)">
     <rosparam>
       interface_name: wlan0
     </rosparam>
   </node>
 
   <!-- network status -->
-  <node pkg="jsk_network_tools" type="network_status.py" name="network_status" />
+  <node pkg="jsk_network_tools" type="network_status.py" name="network_status" if="$(arg network_status)"/>
 
   <!-- speech recognition -->
-  <node name="respeaker_transformer" pkg="tf" type="static_transform_publisher"
-        args="0 0 0.1 0 0 0 head_pan_link respeaker_base 100"/>
-  <!-- disable sound_play in julius.launch and place it in fetch_bringup.launch -->
-  <!-- see: https://github.com/jsk-ros-pkg/jsk_robot/pull/1140 -->
-  <include file="$(find julius_ros)/launch/julius.launch">
-    <arg name="launch_audio_capture" value="false"/>
-    <arg name="launch_sound_play" value="false"/>
-    <arg name="speech_to_text_topic" value="speech_to_text_julius"/>
-  </include>
-  <include file="$(find respeaker_ros)/launch/sample_respeaker.launch">
-    <arg name="publish_tf" default="false"/>
-    <arg name="launch_soundplay" default="false"/>
-    <arg name="audio" value="speech_audio"/>
-    <arg name="speech_to_text" value="speech_to_text_google"/>
-    <arg name="language" value="ja-JP"/>
-  </include>
-  <!-- set fetch speak action server names -->
-  <!-- this parameter is for speech_to_text node in respeaker_ros -->
-  <!-- https://github.com/jsk-ros-pkg/jsk_3rdparty/pull/168 -->
-  <group ns="speech_to_text">
-    <rosparam>
-       tts_action_names:
-         - sound_play
-         - robotsound_jp
-    </rosparam>
+  <group if="$(arg use_speech_recognition)">
+    <node name="respeaker_transformer" pkg="tf" type="static_transform_publisher"
+          args="0 0 0.1 0 0 0 head_pan_link respeaker_base 100"/>
+    <!-- disable sound_play in julius.launch and place it in fetch_bringup.launch -->
+    <!-- see: https://github.com/jsk-ros-pkg/jsk_robot/pull/1140 -->
+    <include file="$(find julius_ros)/launch/julius.launch">
+      <arg name="launch_audio_capture" value="false"/>
+      <arg name="launch_sound_play" value="false"/>
+      <arg name="speech_to_text_topic" value="speech_to_text_julius"/>
+    </include>
+    <include file="$(find respeaker_ros)/launch/sample_respeaker.launch">
+      <arg name="publish_tf" default="false"/>
+      <arg name="launch_soundplay" default="false"/>
+      <arg name="audio" value="speech_audio"/>
+      <arg name="speech_to_text" value="speech_to_text_google"/>
+      <arg name="language" value="ja-JP"/>
+    </include>
+    <!-- set fetch speak action server names -->
+    <!-- this parameter is for speech_to_text node in respeaker_ros -->
+    <!-- https://github.com/jsk-ros-pkg/jsk_3rdparty/pull/168 -->
+    <group ns="speech_to_text">
+      <rosparam>
+        tts_action_names:
+        - sound_play
+        - robotsound_jp
+      </rosparam>
+    </group>
+    <!-- select mux for selecting speech_to_text service -->
+    <!-- the mux node is in jsk_3rdparty/dialogflow_task_executive -->
+    <!-- https://github.com/jsk-ros-pkg/jsk_3rdparty/tree/master/dialogflow_task_executive -->
+    <node name="speech_to_text_selector" pkg="jsk_robot_startup" type="mux_selector.py"
+          respawn="true"
+          args="/network/connected 'm.data==False' /speech_to_text_julius">
+      <remap from="mux" to="speech_to_text_mux" />
+      <rosparam>
+        default_select: speech_to_text_google
+        patient: 6
+      </rosparam>
+    </node>
   </group>
-  <!-- select mux for selecting speech_to_text service -->
-  <!-- the mux node is in jsk_3rdparty/dialogflow_task_executive -->
-  <!-- https://github.com/jsk-ros-pkg/jsk_3rdparty/tree/master/dialogflow_task_executive -->
-  <node name="speech_to_text_selector" pkg="jsk_robot_startup" type="mux_selector.py"
-        respawn="true"
-        args="/network/connected 'm.data==False' /speech_to_text_julius">
-    <remap from="mux" to="speech_to_text_mux" />
-    <rosparam>
-      default_select: speech_to_text_google
-      patient: 6
-    </rosparam>
-  </node>
 
   <group if="$(arg launch_move_base)">
     <!-- jsk_maps -->
@@ -181,35 +202,6 @@
       <arg name="launch_map_server" value="false" />
       <arg name="odom_topic" value="/odom_combined" />
     </include>
-
-    <!-- slam for build a map -->
-    <node pkg="slam_karto" type="slam_karto" name="slam_karto"
-          output="screen" if="$(arg use_build_map)" >
-      <remap from="scan" to="base_scan"/>
-    </node>
-
-    <!-- robot localization ukf -->
-    <node pkg="robot_localization" type="ukf_localization_node" name="ukf_se" clear_params="true">
-      <remap from="odometry/filtered" to="/odom_combined" />
-      <rosparam>
-        frequency: 50
-        sensor_timeout: 1.0
-        two_d_mode: true
-        publish_tf: true
-        publish_acceleration: false
-        map_frame: map
-        odom_frame: odom
-        base_link_frame: base_link
-        odom0: /odom_corrected
-        odom0_config: [true, true, false,
-                       false, false, true,
-                       true, true, false,
-                       false, false, true,
-                       false, false, false]
-        odom0_nodelay: true
-        odom0_differential: true
-      </rosparam>
-    </node>
 
     <rosparam ns="amcl">
       kld_err: 0.1
@@ -313,17 +305,10 @@
     </rosparam>
   </group>
 
-  <!-- /imu has no frame_id information and there is no bug fix release in indigo. -->
-  <!-- see https://github.com/fetchrobotics/fetch_ros/issues/70 -->
-  <node name="imu_corrector" pkg="jsk_fetch_startup" type="imu_corrector.py">
-    <remap from="~input" to="/imu" />
-    <remap from="~output" to="/imu_corrected" />
-  </node>
-
-  <!-- /odom has no covariance value. -->
-  <node name="odom_corrector" pkg="jsk_fetch_startup" type="odom_corrector.py">
-    <remap from="~input" to="/odom" />
-    <remap from="~output" to="/odom_corrected" />
+  <!-- slam for build a map -->
+  <node pkg="slam_karto" type="slam_karto" name="slam_karto"
+        output="screen" if="$(arg use_build_map)" >
+    <remap from="scan" to="base_scan"/>
   </node>
 
   <!-- robot_pose_publisher for rwt_nav -->
