@@ -213,10 +213,11 @@
       laser_z_rand: 0.5
       laser_sigma_hit: 0.1
       laser_likelihood_max_dist: 4.0
-      odom_alpha1: 0.1   # rotation noise per rotation
-      odom_alpha2: 0.05  # rotation noise per translation
-      odom_alpha3: 0.05  # translation noise per translation
-      odom_alpha4: 0.1   # translation noise per rotation
+      odom_alpha1: 0.01  # rotation noise per rotation
+      odom_alpha2: 0.01  # rotation noise per translation
+      odom_alpha3: 0.01  # translation noise per translation
+      odom_alpha4: 0.01  # translation noise per rotation
+      odom_alpha5: 0.02
     </rosparam>
 
     <rosparam ns="move_base">
