@@ -71,7 +71,13 @@
   </group>
 
   <!-- Do not publish /base_controller/command if fetch is docking -->
-  <node pkg="jsk_fetch_startup" name="warning" type="warning.py" respawn="true" />
+  <node pkg="jsk_fetch_startup" name="warning" type="warning.py" respawn="true" >
+    <remap from="base_controller/command" to="base_controller/command_unorganized" />
+  </node>
+
+  <node pkg="jsk_fetch_startup" name="organize_base_command" type="organize_base_command.py" respawn="true" />
+
+  <node pkg="jsk_fetch_startup" name="odom_to_twist" type="odom_to_twist.py" respawn="true" />
 
   <!-- copied for button mapping is changed to standardize with PR2 joy. -->
   <node name="controller_reset" pkg="fetch_bringup" type="controller_reset.py">
